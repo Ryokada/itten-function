@@ -1,0 +1,22 @@
+{
+    "extends": [
+        "eslint:recommended",
+        "plugin:import/warnings",
+        "plugin:import/typescript",
+        "plugin:@typescript-eslint/recommended"
+    ],
+    "ignorePatterns": [
+        "/lib/**/*" // Ignore built files.
+    ],
+    "plugins": ["@typescript-eslint", "import"],
+    "rules": {
+        "import/order": [
+            "error",
+            {
+                "alphabetize": {
+                    "order": "asc"
+                }
+            }
+        ]
+    }
+}

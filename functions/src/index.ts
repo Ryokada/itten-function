@@ -94,3 +94,26 @@ export const linePush = functions
         logger.info('LINE push done');
         response.send('OK');
     });
+
+export const linePushOnCall = functions
+    .region('asia-northeast1')
+    .https.onCall(async (data, context) => {
+        logger.info('LINE push called', data, context);
+
+        const LinePushRequest: LinePushRequest = data;
+
+        await client.pushMessage({
+            to: LinePushRequest.toId,
+            messages: [
+                {
+                    type: 'text',
+                    text: '送信テスト',
+                },
+            ],
+        });
+
+        logger.info('LINE push done');
+        return {
+            OK: 'OK',
+        };
+    });

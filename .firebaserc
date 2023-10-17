@@ -1,8 +1,8 @@
 {
-  "projects": {
-    "default": "itten-web",
-    "dev": "itten-web-dev"
-  },
-  "targets": {},
-  "etags": {}
+    "projects": {
+        "dev": "itten-web-dev",
+        "prd": "itten-web"
+    },
+    "targets": {},
+    "etags": {}
 }

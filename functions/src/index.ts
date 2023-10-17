@@ -117,3 +117,39 @@ export const linePushOnCall = functions
             OK: 'OK',
         };
     });
+
+/**
+ * スケジュール追加時にグループLINEで通知するAPI
+ */
+export const lineSendAddScheduleMessage = functions
+    .region('asia-northeast1')
+    .https.onCall(async (data, context) => {
+        throw new Error('Not implemented');
+    });
+
+/**
+ * スケジュール変更時にグループLINEで通知するAPI
+ */
+export const lineSendChangeScheduleMessage = functions
+    .region('asia-northeast1')
+    .https.onCall(async (data, context) => {
+        throw new Error('Not implemented');
+    });
+
+/**
+ * 出欠回答期限内のスケジュールについてグループLINEで通知するAPI
+ */
+export const lineSendAnnounceInputSchedule = functions
+    .region('asia-northeast1')
+    .https.onCall(async (data, context) => {
+        throw new Error('Not implemented');
+    });
+
+/**
+ * 任意のユーザー達ににスケジュールの回答を促すメッセージを送信するAPI
+ */
+export const lineSendRemindInputSchedule = functions
+    .region('asia-northeast1')
+    .https.onCall(async (data, context) => {
+        throw new Error('Not implemented');
+    });

@@ -95,6 +95,11 @@ export const linePush = functions
         response.send('OK');
     });
 
+/**
+ * 任意のLINEユーザーまたはグループにメッセージを送信するAPI
+ *
+ * RequestData: @see LinePushRequest
+ */
 export const linePushOnCall = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {

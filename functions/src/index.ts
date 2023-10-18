@@ -1,4 +1,4 @@
-import { ClientConfig, TemplateMessage, messagingApi, webhook } from '@line/bot-sdk';
+import { ClientConfig, TextMessage, TemplateMessage, messagingApi, webhook } from '@line/bot-sdk';
 import dayjs from 'dayjs';
 import ja from 'dayjs/locale/ja';
 import * as admin from 'firebase-admin';
@@ -167,7 +167,7 @@ const lineSendScheduleMessageCore = async (
     if (!targetId || !lineSendScheduleMessageRequest.scheduleId) {
         logger.error('必要なパラメータが足りません', lineSendScheduleMessageRequest);
         throw new functions.https.HttpsError('invalid-argument', '必要なパラメータが足りません', {
-            key: 'linePushRequest',
+            key: 'data',
             value: lineSendScheduleMessageRequest,
         });
     }
@@ -242,13 +242,88 @@ export const lineSendAnnounceInputSchedule = functions
         throw new Error('Not implemented');
     });
 
+type LineSendRemindInputScheduleRequest = {
+    toIds: string[];
+    scheduleId: string;
+};
+
 /**
  * 任意のユーザー達ににスケジュールの回答を促すメッセージを送信するAPI
  */
 export const lineSendRemindInputSchedule = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
-        throw new Error('Not implemented');
+        const request: LineSendRemindInputScheduleRequest = data;
+
+        if (!request.toIds || !request.scheduleId || request.toIds.length === 0) {
+            logger.error('必要なパラメータが足りません', request);
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                '必要なパラメータが足りません',
+                {
+                    key: 'data',
+                    value: request,
+                },
+            );
+        }
+
+        const scheduleSnapshot = (await firestoreAdmin
+            .collection('schedules')
+            .doc(request.scheduleId)
+            .get()) as DocumentSnapshot<ScheduleDoc>;
+
+        const schedule = scheduleSnapshot.data();
+
+        if (!scheduleSnapshot.exists || !schedule) {
+            logger.error(`指定されたスケジュール${request.scheduleId}は存在しません`);
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                `指定されたスケジュール${request.scheduleId}は存在しません`,
+                {
+                    key: 'scheduleId',
+                    value: request.scheduleId,
+                },
+            );
+        }
+
+        logger.info('target schedule', schedule);
+
+        const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp));
+        const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp));
+
+        const scheduleMessage: TemplateMessage = {
+            type: 'template',
+            altText: `予定の出欠に回答してください（[${startTsDayjs.format(
+                'M/D(dd)',
+            )}]${schedule?.title}）`,
+            template: {
+                type: 'buttons',
+                title: truncateString(`予定の出欠に回答してください「${schedule.title}」`, 40),
+                text: truncateString(
+                    `${schedule.placeName}[${startTsDayjs.format(
+                        'M/D(dd)H:mm',
+                    )}-${endTsDayjs.format('H:mm')}]`,
+                    60,
+                ),
+                actions: [
+                    {
+                        type: 'uri',
+                        label: '詳細を見る',
+                        uri: `${siteBaseUrl}/member/schedule/${request.scheduleId}`,
+                    },
+                ],
+            },
+        };
+
+        const message = await client.multicast({
+            to: request.toIds,
+            messages: [scheduleMessage],
+        });
+
+        logger.info(`LINEで予定リマインドメッセージを送信しました`, message);
+        return {
+            OK: 'OK',
+        };
     });
 
 function truncateString(str: string, length = 40): string {

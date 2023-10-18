@@ -1,13 +1,24 @@
-import { ClientConfig, messagingApi, webhook } from '@line/bot-sdk';
+import { ClientConfig, TemplateMessage, messagingApi, webhook } from '@line/bot-sdk';
+import dayjs from 'dayjs';
+import ja from 'dayjs/locale/ja';
+import * as admin from 'firebase-admin';
+import { DocumentSnapshot, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import * as functions from 'firebase-functions';
 import * as logger from 'firebase-functions/logger';
+import ScheduleDoc from './types/schedule';
+
+dayjs.locale(ja);
 
 const lineConfig: ClientConfig = {
     channelSecret: process.env.LINE_CHANNEL_SECRET,
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
 };
 
+const siteBaseUrl = process.env.SITE_BASE_URL || 'http://localhost:3000';
+
 const client = new messagingApi.MessagingApiClient(lineConfig);
+const firebaseAdmin = admin.initializeApp();
+const firestoreAdmin = getFirestore(firebaseAdmin);
 
 /**
  * Hello WorldのAPI
@@ -123,13 +134,19 @@ export const linePushOnCall = functions
         };
     });
 
+type LineSendScheduleMessageRequest = {
+    toId?: string;
+    scheduleId: string;
+};
+
 /**
  * スケジュール追加時にグループLINEで通知するAPI
  */
 export const lineSendAddScheduleMessage = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
-        throw new Error('Not implemented');
+        const linePushRequest: LineSendScheduleMessageRequest = data;
+        return await lineSendScheduleMessageCore(linePushRequest, '追加');
     });
 
 /**
@@ -138,8 +155,83 @@ export const lineSendAddScheduleMessage = functions
 export const lineSendChangeScheduleMessage = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
-        throw new Error('Not implemented');
+        const linePushRequest: LineSendScheduleMessageRequest = data;
+        return await lineSendScheduleMessageCore(linePushRequest, '変更');
     });
+
+const lineSendScheduleMessageCore = async (
+    lineSendScheduleMessageRequest: LineSendScheduleMessageRequest,
+    label: '追加' | '変更',
+) => {
+    const targetId = lineSendScheduleMessageRequest.toId ?? process.env.LINE_GROUP_ID;
+    if (!targetId || !lineSendScheduleMessageRequest.scheduleId) {
+        logger.error('必要なパラメータが足りません', lineSendScheduleMessageRequest);
+        throw new functions.https.HttpsError('invalid-argument', '必要なパラメータが足りません', {
+            key: 'linePushRequest',
+            value: lineSendScheduleMessageRequest,
+        });
+    }
+
+    const scheduleSnapshot = (await firestoreAdmin
+        .collection('schedules')
+        .doc(lineSendScheduleMessageRequest.scheduleId)
+        .get()) as DocumentSnapshot<ScheduleDoc>;
+
+    const schedule = scheduleSnapshot.data();
+
+    if (!scheduleSnapshot.exists || !schedule) {
+        logger.error(
+            `指定されたスケジュール${lineSendScheduleMessageRequest.scheduleId}は存在しません`,
+        );
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            `指定されたスケジュール${lineSendScheduleMessageRequest.scheduleId}は存在しません`,
+            {
+                key: 'scheduleId',
+                value: lineSendScheduleMessageRequest.scheduleId,
+            },
+        );
+    }
+
+    logger.info('target schedule', schedule);
+
+    const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp));
+    const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp));
+
+    const scheduleMessage: TemplateMessage = {
+        type: 'template',
+        altText: `予定が${label}されました（[${startTsDayjs.format(
+            'M/D(dd)',
+        )}]${schedule?.title}）`,
+        template: {
+            type: 'buttons',
+            title: truncateString(`予定${label}「${schedule.title}」`, 40),
+            text: truncateString(
+                `${schedule.placeName}[${startTsDayjs.format('M/D(dd)H:mm')}-${endTsDayjs.format(
+                    'H:mm',
+                )}]`,
+                60,
+            ),
+            actions: [
+                {
+                    type: 'uri',
+                    label: '詳細を見る',
+                    uri: `${siteBaseUrl}/member/schedule/${lineSendScheduleMessageRequest.scheduleId}`,
+                },
+            ],
+        },
+    };
+
+    const message = await client.pushMessage({
+        to: targetId,
+        messages: [scheduleMessage],
+    });
+
+    logger.info(`LINEで予定${label}メッセージを送信しました`, message);
+    return {
+        OK: 'OK',
+    };
+};
 
 /**
  * 出欠回答期限内のスケジュールについてグループLINEで通知するAPI
@@ -158,3 +250,37 @@ export const lineSendRemindInputSchedule = functions
     .https.onCall(async (data, context) => {
         throw new Error('Not implemented');
     });
+
+function truncateString(str: string, length = 40): string {
+    if (str.length <= length) {
+        return str;
+    }
+    return str.substring(0, length);
+}
+
+/**
+ * Timestamp から Date を取得する
+ *
+ * エミュレータだと何故かTimestamp型の情報が不足し、toDate()が使えないので再生成しtoDateを返す
+ * @param unsafetyTimestamp
+ * @returns
+ */
+function getSaftyDate(unsafetyTimestamp: Timestamp) {
+    let safetyDate;
+    try {
+        safetyDate = unsafetyTimestamp.toDate();
+    } catch (error) {
+        if (error instanceof TypeError) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const dengerTimestamp: any = unsafetyTimestamp;
+            const safetyTimestamp = new Timestamp(
+                dengerTimestamp._seconds,
+                dengerTimestamp._nanoseconds,
+            );
+            safetyDate = safetyTimestamp.toDate();
+        } else {
+            throw error;
+        }
+    }
+    return safetyDate;
+}

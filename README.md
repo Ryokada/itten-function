@@ -34,10 +34,10 @@ firebase use prd
 
 
 
-エミュレーター起動
+エミュレーター起動（データを保存）
 
 ```
-firebase emulators:start
+firebase emulators:start --import=./dir --export-on-exit
 ```
 
 FunctionsのTypeScriptの変更をウォッチしてビルド

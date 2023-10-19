@@ -1,8 +1,8 @@
-import { ClientConfig, TextMessage, TemplateMessage, messagingApi, webhook } from '@line/bot-sdk';
+import { ClientConfig, TemplateMessage, messagingApi, webhook, TemplateColumn } from '@line/bot-sdk';
 import dayjs from 'dayjs';
 import ja from 'dayjs/locale/ja';
 import * as admin from 'firebase-admin';
-import { DocumentSnapshot, Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { CollectionReference, DocumentSnapshot, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import * as functions from 'firebase-functions';
 import * as logger from 'firebase-functions/logger';
 import ScheduleDoc from './types/schedule';
@@ -193,7 +193,7 @@ const lineSendScheduleMessageCore = async (
         );
     }
 
-    logger.info('target schedule', schedule);
+    logger.info(`LINEで予定${label}のメッセージを送信します`, schedule);
 
     const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp));
     const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp));
@@ -233,14 +233,157 @@ const lineSendScheduleMessageCore = async (
     };
 };
 
+type LineSendAnnounceInputScheduleRequest = {
+    toId?: string;
+}
+
 /**
  * 出欠回答期限内のスケジュールについてグループLINEで通知するAPI
  */
 export const lineSendAnnounceInputSchedule = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
-        throw new Error('Not implemented');
+        const request: LineSendAnnounceInputScheduleRequest = data;
+        const targetId = request.toId ?? process.env.LINE_GROUP_ID;
+        if (!targetId) {
+            logger.error('必要なパラメータが足りません', request);
+            throw new functions.https.HttpsError('invalid-argument', '必要なパラメータが足りません', {
+                key: 'data',
+                value: request,
+            });
+        }
+
+        const limitDays = await getScheduleAnswerLimitDays();
+
+        await lineSendAnnounceInputScheduleCore(targetId, limitDays);
+        return {
+            OK: 'OK',
+        };
     });
+
+/**
+ * 定期的に出欠回答期限内のスケジュールについてグループLINEで通知するジョブ
+ */
+export const lineSendAnnounceInputScheduleOnSchedule = functions
+    .region('asia-northeast1')
+    // TODO: Corntab外から変更できるようにする
+    .pubsub.schedule('0 8 * * 0').timeZone('Asia/Tokyo').onRun(async (context) => {
+        const settingSnapshot = (await firestoreAdmin
+            .collection('settings')
+            .doc("LINE_SEND_ANNOUNCE_BACH")
+            .get()) as DocumentSnapshot<settingValue>;
+        
+        if (!settingSnapshot.exists || !settingSnapshot.data()?.value) {
+            logger.warn(`LINE_SEND_ANNOUNCE_BACH の設定によりジョブをパスします。`, );
+            return;
+        }
+
+        const targetId = process.env.LINE_GROUP_ID;
+        if (!targetId) {
+            logger.error('必要なパラメータが足りません', targetId);
+            return;
+        }
+
+        const limitDays = await getScheduleAnswerLimitDays();
+
+        await lineSendAnnounceInputScheduleCore(targetId, limitDays);
+        return {
+            OK: 'OK',
+        };
+    });
+
+const getScheduleAnswerLimitDays = async (): Promise<number> => {
+
+    const defaultValue = 20;
+    
+    const settingSnapshot = (await firestoreAdmin
+        .collection('settings')
+        .doc("SCHEDULE_ANSWER_LIMIT_DAYS")
+        .get()) as DocumentSnapshot<settingValue>;
+
+    if (!settingSnapshot.exists) {
+        return defaultValue;
+    }
+
+    const days = settingSnapshot.data()?.value;
+    if (!days) {
+        return defaultValue;
+    }
+
+
+    if (typeof days !== 'number') {
+        return defaultValue;
+    }
+
+    return days;
+}
+
+const lineSendAnnounceInputScheduleCore = async (targetId: string, scheduleAnswerLimitDays: number) => {
+
+    const now = new Date();
+
+    const answerLimitStart = new Date(now);
+    const answerLimitEnd = new Date(now.setDate(now.getDate() + scheduleAnswerLimitDays));
+
+    const schedulesCollection = firestoreAdmin.collection('schedules') as CollectionReference<ScheduleDoc>;
+    const schedulesSnapshots = await schedulesCollection
+        .orderBy('startTimestamp')
+        .startAt(answerLimitStart)
+        .endAt(answerLimitEnd)
+        .get();
+    const scheduleDocs = schedulesSnapshots.docs;
+
+    if (scheduleDocs.length === 0) {
+        logger.info(`通知対象のスケジュールが存在しないので終了します`);
+        return;
+    }
+    
+    logger.info(`LINEで出欠回答期限内のスケジュールを通知します`, scheduleDocs);
+    
+    const templateColumns: TemplateColumn[]  = scheduleDocs.map((scheduleDoc) => {
+        const schedule = scheduleDoc.data();
+        const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp));
+        const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp));
+        return {
+            title: truncateString(`[${startTsDayjs.format('M/D(dd)')}]${schedule?.title}`, 40),
+            text: truncateString(
+                `${schedule.placeName}[${startTsDayjs.format('M/D(dd)H:mm')}-${endTsDayjs.format(
+                    'H:mm',
+                )}]`,
+                60,
+            ),
+            defaultAction: {
+                type: 'uri',
+                label: '詳細を見る',
+                uri: `${siteBaseUrl}/member/schedule/${scheduleDoc.id}`,
+            },
+            actions: [
+                {
+                    type: 'uri',
+                    label: '回答する',
+                    uri: `${siteBaseUrl}/member/schedule/${scheduleDoc.id}`,
+                },
+            ],
+        };
+    });
+
+    const schedulesMessage: TemplateMessage = {
+        type: 'template',
+        altText: `回答期限が迫っている予定があります。回答してください〜`,
+        template: {
+            type: 'carousel',
+            columns: templateColumns,
+        },
+    };
+
+    const message = await client.pushMessage({
+        to: targetId,
+        messages: [schedulesMessage],
+    });
+
+
+    logger.info(`LINEで予定回答の催促メッセージを送信しました。`, message);
+}
 
 type LineSendRemindInputScheduleRequest = {
     toIds: string[];

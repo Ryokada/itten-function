@@ -483,7 +483,7 @@ export const lineSendRemindInputSchedule = functions
         };
 
         const message = await client.multicast({
-            to: request.toIds,
+            to: request.toIds.filter((id) => id),
             messages: [scheduleMessage],
         });
 

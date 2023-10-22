@@ -142,7 +142,7 @@ export const linePushOnCall = functions
 
         logger.info('LINE push done');
         return {
-            OK: 'OK',
+            result: 'OK',
         };
     });
 
@@ -241,7 +241,7 @@ const lineSendScheduleMessageCore = async (
 
     logger.info(`LINEで予定${label}メッセージを送信しました`, message);
     return {
-        OK: 'OK',
+        result: 'OK',
     };
 };
 
@@ -273,7 +273,7 @@ export const lineSendAnnounceInputSchedule = functions
 
         await lineSendAnnounceInputScheduleCore(targetId, limitDays);
         return {
-            OK: 'OK',
+            result: 'OK',
         };
     });
 
@@ -296,7 +296,7 @@ export const lineSendAnnounceInputScheduleOnSchedule = functions
 
         await lineSendAnnounceInputScheduleCore(targetId, limitDays);
         return {
-            OK: 'OK',
+            result: 'OK',
         };
     });
 

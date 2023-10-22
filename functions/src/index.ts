@@ -5,6 +5,7 @@ import {
     webhook,
     TemplateColumn,
     TextMessage,
+    Message,
 } from '@line/bot-sdk';
 import dayjs from 'dayjs';
 import ja from 'dayjs/locale/ja';
@@ -406,12 +407,13 @@ const lineSendAnnounceInputScheduleCore = async (
         messages: [announce, schedulesMessage],
     });
 
-    logger.info(`LINEで予定回答の催促メッセージを送信しました。`, message);
+    logger.info(`LINEで出欠回答期限内のスケジュールを通知しました。`, message);
 };
 
 type LineSendRemindInputScheduleRequest = {
     toIds: string[];
     scheduleId: string;
+    additionalMessage?: string;
 };
 
 /**
@@ -434,6 +436,13 @@ export const lineSendRemindInputSchedule = functions
             );
         }
 
+        if (request.toIds.length === 0) {
+            logger.warn('指定された送信先ユーザーが0名なのでなにもしません。', request);
+            return {
+                result: 'NO_TARGET',
+            };
+        }
+
         const scheduleSnapshot = (await firestoreAdmin
             .collection('schedules')
             .doc(request.scheduleId)
@@ -453,23 +462,23 @@ export const lineSendRemindInputSchedule = functions
             );
         }
 
-        logger.info('target schedule', schedule);
+        logger.info('催促通知を実行します', schedule, request);
 
         const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp));
         const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp));
 
         const scheduleMessage: TemplateMessage = {
             type: 'template',
-            altText: `予定の出欠を回答してください（[${startTsDayjs.format(
+            altText: `出欠を回答してください（[${startTsDayjs.format(
                 'M/D(dd)',
             )}]${schedule?.title}）`,
             template: {
                 type: 'buttons',
-                title: truncateString(`予定の出欠を回答してください「${schedule.title}」`, 40),
+                title: truncateString(`「${schedule.title}」に出欠を回答してください`, 40),
                 text: truncateString(
-                    `${schedule.placeName}[${startTsDayjs.format(
-                        'M/D(dd)H:mm',
-                    )}-${endTsDayjs.format('H:mm')}]`,
+                    `[${startTsDayjs.format('M/D(dd)H:mm')}-${endTsDayjs.format('H:mm')}] @${
+                        schedule.placeName
+                    }`,
                     60,
                 ),
                 actions: [
@@ -482,14 +491,24 @@ export const lineSendRemindInputSchedule = functions
             },
         };
 
+        const messages: Message[] = [scheduleMessage];
+
+        if (request.additionalMessage) {
+            const additionalMessage: TextMessage = {
+                type: 'text',
+                text: request.additionalMessage,
+            };
+            messages.push(additionalMessage);
+        }
+
         const message = await client.multicast({
             to: request.toIds.filter((id) => id),
-            messages: [scheduleMessage],
+            messages: messages,
         });
 
-        logger.info(`LINEで予定リマインドメッセージを送信しました`, message);
+        logger.info(`LINEで催促通知しました`, message);
         return {
-            OK: 'OK',
+            result: 'OK',
         };
     });
 

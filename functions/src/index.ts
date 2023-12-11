@@ -9,6 +9,8 @@ import {
 } from '@line/bot-sdk';
 import dayjs from 'dayjs';
 import ja from 'dayjs/locale/ja';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
 import * as admin from 'firebase-admin';
 import {
     CollectionReference,
@@ -20,7 +22,11 @@ import * as functions from 'firebase-functions';
 import * as logger from 'firebase-functions/logger';
 import ScheduleDoc from './types/schedule';
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
 dayjs.locale(ja);
+
+const STATIC_TIMEZONE = 'Asia/Tokyo';
 
 const lineConfig: ClientConfig = {
     channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -208,8 +214,8 @@ const lineSendScheduleMessageCore = async (
 
     logger.info(`LINEで予定${label}のメッセージを送信します`, schedule);
 
-    const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp));
-    const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp));
+    const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp)).tz(STATIC_TIMEZONE);
+    const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp)).tz(STATIC_TIMEZONE);
 
     const scheduleMessage: TemplateMessage = {
         type: 'template',
@@ -363,8 +369,9 @@ const lineSendAnnounceInputScheduleCore = async (
 
     const templateColumns: TemplateColumn[] = scheduleDocs.map((scheduleDoc) => {
         const schedule = scheduleDoc.data();
-        const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp));
-        const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp));
+        const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp)).tz(STATIC_TIMEZONE);
+        const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp)).tz(STATIC_TIMEZONE);
+
         return {
             title: truncateString(`[${startTsDayjs.format('M/D(dd)')}]${schedule?.title}`, 40),
             text: truncateString(
@@ -464,8 +471,8 @@ export const lineSendRemindInputSchedule = functions
 
         logger.info('催促通知を実行します', schedule, request);
 
-        const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp));
-        const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp));
+        const startTsDayjs = dayjs(getSaftyDate(schedule.startTimestamp)).tz(STATIC_TIMEZONE);
+        const endTsDayjs = dayjs(getSaftyDate(schedule.endTimestamp)).tz(STATIC_TIMEZONE);
 
         const scheduleMessage: TemplateMessage = {
             type: 'template',

@@ -358,7 +358,7 @@ const lineSendAnnounceInputScheduleCore = async (
         .startAt(answerLimitStart)
         .endAt(answerLimitEnd)
         .get();
-    const scheduleDocs = schedulesSnapshots.docs;
+    const scheduleDocs = schedulesSnapshots.docs.filter((doc) => !doc.data().isDeleted);
 
     if (scheduleDocs.length === 0) {
         logger.info(`通知対象のスケジュールが存在しないので終了します`);

@@ -77,6 +77,11 @@ type ScheduleDoc = {
      * 参加保留者
      */
     holdMembers: Array<ScheduledMember>;
+
+    /**
+     * 削除済みかどうか
+     */
+    isDeleted?: boolean;
 };
 
 export type ScheduledMember = {

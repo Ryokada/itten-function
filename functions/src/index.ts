@@ -74,7 +74,7 @@ export const lineWebhook = functions
                         messages: [
                             {
                                 type: 'text',
-                                text: 'なにもできません',
+                                text: '一天運営アカウントはまだ何もできません。メンバーとの会話は引き続き一天グループLINEでお願いします。',
                             },
                         ],
                     });

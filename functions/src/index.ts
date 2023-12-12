@@ -15,11 +15,13 @@ import * as admin from 'firebase-admin';
 import {
     CollectionReference,
     DocumentSnapshot,
+    QuerySnapshot,
     Timestamp,
     getFirestore,
 } from 'firebase-admin/firestore';
 import * as functions from 'firebase-functions';
 import * as logger from 'firebase-functions/logger';
+import { getAnotherFirestore } from './replica/anotherStore';
 import ScheduleDoc from './types/schedule';
 
 dayjs.extend(utc);
@@ -552,3 +554,79 @@ function getSaftyDate(unsafetyTimestamp: Timestamp) {
     }
     return safetyDate;
 }
+
+type buildReplicaScheduleFromPrdToDevRequest = {
+    token: string;
+};
+
+/**
+ * 本番環境のスケジュールコレクションを開発環境のスケジュールコレクションにレプリカするAPI
+ */
+export const buildReplicaScheduleFromPrdToDev = functions
+    .region('asia-northeast1')
+    .https.onCall(async (data, context) => {
+        const request = data as buildReplicaScheduleFromPrdToDevRequest;
+        if (request.token !== process.env.TOKEN) {
+            throw new functions.https.HttpsError('permission-denied', 'Auth Token Error');
+        }
+
+        const targetCollectionName = 'schedules';
+        logger.info('buildReplicaFromPrdToDev start');
+        const sourceStore = getAnotherFirestore();
+        const targetStore = firestoreAdmin;
+
+        logger.info(`[${targetCollectionName}] データのレプリカを開始します`, {
+            sourceStore: sourceStore,
+            targetStore: targetStore,
+        });
+
+        // targetのコレクションを全件削除しておく
+        const targetCollectionSnapshots = (await targetStore
+            .collection(targetCollectionName)
+            .get()) as QuerySnapshot<ScheduleDoc>;
+        const deleteBatch = targetStore.batch();
+        targetCollectionSnapshots.forEach((doc) => {
+            deleteBatch.delete(doc.ref);
+        });
+        await deleteBatch.commit();
+
+        logger.info(
+            `[${targetCollectionName}] データを削除しました。${targetCollectionSnapshots.size}件`,
+        );
+
+        const fromCollectionSnapshots = (await sourceStore
+            .collection(targetCollectionName)
+            .get()) as QuerySnapshot<ScheduleDoc>;
+
+        const writeBatch = targetStore.batch();
+        fromCollectionSnapshots.forEach((doc) => {
+            const replicaData = {
+                ...doc.data(),
+                okMembers: [],
+                ngMembers: [],
+                holdMembers: [],
+                createdBy: 'replica',
+                updatedBy: 'replica',
+            };
+            logger.log(`[${targetCollectionName}] データをレプリカします`, doc.id, replicaData);
+            const targetDoc = targetStore.collection(targetCollectionName).doc(doc.id);
+            writeBatch.set(targetDoc, replicaData);
+        });
+
+        await writeBatch.commit();
+        logger.info(
+            `[${targetCollectionName}] データのレプリカが完了しました。${fromCollectionSnapshots.size}件`,
+            {
+                sourceStore: sourceStore,
+                targetStore: targetStore,
+            },
+        );
+
+        logger.info('buildReplicaFromPrdToDev end');
+
+        return {
+            result: {
+                message: `[${targetCollectionName}] データのレプリカが完了しました。${fromCollectionSnapshots.size}件`,
+            },
+        };
+    });

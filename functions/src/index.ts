@@ -135,6 +135,9 @@ export const linePush = functions
 export const linePushOnCall = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('permission-denied', 'Auth Error');
+        }
         logger.info('LINE push called', data, context);
 
         const LinePushRequest: LinePushRequest = data;
@@ -166,6 +169,9 @@ type LineSendScheduleMessageRequest = {
 export const lineSendAddScheduleMessage = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('permission-denied', 'Auth Error');
+        }
         const linePushRequest: LineSendScheduleMessageRequest = data;
         return await lineSendScheduleMessageCore(linePushRequest, '追加');
     });
@@ -176,6 +182,9 @@ export const lineSendAddScheduleMessage = functions
 export const lineSendChangeScheduleMessage = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('permission-denied', 'Auth Error');
+        }
         const linePushRequest: LineSendScheduleMessageRequest = data;
         return await lineSendScheduleMessageCore(linePushRequest, '変更');
     });
@@ -264,6 +273,9 @@ type LineSendAnnounceInputScheduleRequest = {
 export const lineSendAnnounceInputSchedule = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('permission-denied', 'Auth Error');
+        }
         const request: LineSendAnnounceInputScheduleRequest = data;
         const targetId = request.toId ?? process.env.LINE_GROUP_ID;
         if (!targetId) {
@@ -431,6 +443,9 @@ type LineSendRemindInputScheduleRequest = {
 export const lineSendRemindInputSchedule = functions
     .region('asia-northeast1')
     .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('permission-denied', 'Auth Error');
+        }
         const request: LineSendRemindInputScheduleRequest = data;
 
         if (!request.toIds || !request.scheduleId || request.toIds.length === 0) {

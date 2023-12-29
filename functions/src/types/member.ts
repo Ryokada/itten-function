@@ -52,6 +52,11 @@ type Member = {
      * メンバーのロール
      */
     role: 'admin' | 'member';
+
+    /**
+     * 休部中かどうか
+     */
+    isSaspended?: boolean;
 };
 
 export default Member;

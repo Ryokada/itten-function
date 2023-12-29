@@ -35,9 +35,16 @@ const lineConfig: ClientConfig = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
 };
 
+const noticeLineConfig: ClientConfig = {
+    channelSecret: process.env.LINE_NOTICE_CHANNEL_SECRET,
+    channelAccessToken: process.env.LINE_NOTICE_CHANNEL_ACCESS_TOKEN || '',
+};
+
 const siteBaseUrl = process.env.SITE_BASE_URL || 'http://localhost:3000';
 
 const client = new messagingApi.MessagingApiClient(lineConfig);
+const noticeLineClient = new messagingApi.MessagingApiClient(noticeLineConfig);
+
 const firebaseAdmin = admin.initializeApp();
 const firestoreAdmin = getFirestore(firebaseAdmin);
 
@@ -113,7 +120,7 @@ export const linePush = functions
 
         const LinePushRequest: LinePushRequest = request.body;
 
-        await client.pushMessage({
+        await noticeLineClient.pushMessage({
             to: LinePushRequest.toId,
             messages: [
                 {
@@ -165,6 +172,8 @@ type LineSendScheduleMessageRequest = {
 
 /**
  * スケジュール追加時にグループLINEで通知するAPI
+ *
+ * 【toGroup】
  */
 export const lineSendAddScheduleMessage = functions
     .region('asia-northeast1')
@@ -178,6 +187,8 @@ export const lineSendAddScheduleMessage = functions
 
 /**
  * スケジュール変更時にグループLINEで通知するAPI
+ *
+ * 【toGroup】
  */
 export const lineSendChangeScheduleMessage = functions
     .region('asia-northeast1')
@@ -252,12 +263,12 @@ const lineSendScheduleMessageCore = async (
         },
     };
 
-    const message = await client.pushMessage({
+    const message = await noticeLineClient.pushMessage({
         to: targetId,
         messages: [scheduleMessage],
     });
 
-    logger.info(`LINEで予定${label}メッセージを送信しました`, message);
+    logger.info(`通知用LINEで予定${label}メッセージを送信しました`, message);
     return {
         result: 'OK',
     };
@@ -269,6 +280,8 @@ type LineSendAnnounceInputScheduleRequest = {
 
 /**
  * 出欠回答期限内のスケジュールについてグループLINEで通知するAPI
+ *
+ * 【toGroup】
  */
 export const lineSendAnnounceInputSchedule = functions
     .region('asia-northeast1')
@@ -300,6 +313,8 @@ export const lineSendAnnounceInputSchedule = functions
 
 /**
  * 定期的に出欠回答期限内のスケジュールについてグループLINEで通知するジョブ
+ *
+ * 【toGroup】
  */
 export const lineSendAnnounceInputScheduleOnSchedule = functions
     .region('asia-northeast1')
@@ -423,12 +438,12 @@ const lineSendAnnounceInputScheduleCore = async (
         text: `回答期限が迫っている予定があります。回答してください〜`,
     };
 
-    const message = await client.pushMessage({
+    const message = await noticeLineClient.pushMessage({
         to: targetId,
         messages: [announce, schedulesMessage],
     });
 
-    logger.info(`LINEで出欠回答期限内のスケジュールを通知しました。`, message);
+    logger.info(`通知用LINEで出欠回答期限内のスケジュールを通知しました。`, message);
 };
 
 type LineSendRemindInputScheduleRequest = {
@@ -439,6 +454,8 @@ type LineSendRemindInputScheduleRequest = {
 
 /**
  * 任意のユーザー達ににスケジュールの回答を促すメッセージを送信するAPI
+ *
+ * 【toMember】
  */
 export const lineSendRemindInputSchedule = functions
     .region('asia-northeast1')

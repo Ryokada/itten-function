@@ -1,10 +1,8 @@
 # itten-function
 
-一天Web向けの内部APIです
+一天 Web 向けの内部 API です
 
-Firebase Functionsで実行されます。
-
-
+Firebase Functions で実行されます。
 
 # Firebase Function
 
@@ -32,15 +30,14 @@ firebase use dev
 firebase use prd
 ```
 
-
-
 エミュレーター起動（データを保存）
 
 ```
+set GOOGLE_APPLICATION_CREDENTIALS={./functions 以下のパス}
 firebase emulators:start --import=./dir --export-on-exit
 ```
 
-FunctionsのTypeScriptの変更をウォッチしてビルド
+Functions の TypeScript の変更をウォッチしてビルド
 
 （別のプロンプト）
 
@@ -49,23 +46,19 @@ cd functions
 npm run build:watch
 ```
 
-
-
 ## 環境変数
 
 https://firebase.google.com/docs/functions/config-env?hl=ja&gen=1st#env-variables
 
 `functions/.env`は共通
 
-devの場合
+dev の場合
 
 ```
 firebase use dev
 ```
 
 -> `/functions/.env.dev`が使われる
-
-
 
 本番の場合
 
@@ -74,8 +67,6 @@ firebase use prd
 ```
 
 -> `/functions/.env.prd` が使われる
-
-
 
 ## デプロイ
 
@@ -91,4 +82,4 @@ firebase use dev (or prd)
 firebase deploy --only functions
 ```
 
-403で失敗することあったけどもっかいやったらできた
+403 で失敗することあったけどもっかいやったらできた

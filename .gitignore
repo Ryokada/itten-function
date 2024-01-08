@@ -66,3 +66,4 @@ node_modules/
 .env
 functions/.env*
 dir
+functions/itten-web-dev-firebase-adminsdk.json

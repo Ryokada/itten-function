@@ -49,6 +49,11 @@ const firebaseAdmin = admin.initializeApp();
 const firestoreAdmin = getFirestore(firebaseAdmin);
 
 /**
+ * 会計処理のAPI
+ */
+exports.accounting = require('./accounting');
+
+/**
  * Hello WorldのAPI
  *
  * @deprecated ただのテスト用
